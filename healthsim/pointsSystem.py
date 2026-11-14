@@ -138,6 +138,30 @@ def summarise(df: pd.DataFrame, now: datetime = None) -> pd.DataFrame:
     return pd.DataFrame(rows) 
 
 
+def combine_activity_data(questionnaire_path, sensor_path, output_path):
+    # 1. Load both CSV files
+    df_questionnaire = pd.read_csv(questionnaire_path)
+    df_sensors = pd.read_csv(sensor_path)
+    
+    # 2. Normalize the date columns so they match perfectly (YYYY-MM-DD)
+    df_questionnaire["date"] = pd.to_datetime(df_questionnaire["date"]).dt.normalize().dt.date
+    df_sensors["date"] = pd.to_datetime(df_sensors["date"]).dt.normalize().dt.date
+    
+    # 3. Merge the datasets together
+    # Using an 'inner' join keeps only rows where both questionnaire and sensor data exist for that user/date.
+    # Change to 'outer' if you want to keep data even if one side is missing.
+    combined_df = pd.merge(
+        df_questionnaire, 
+        df_sensors, 
+        on=["user_id", "date"], 
+        how="inner"
+    )
+    
+    # 4. Save the combined result to a new master CSV
+    combined_df.to_csv(output_path, index=False)
+    print(f"Successfully combined data! Saved to {output_path}")
+    print(combined_df.head())
+
 def main():
     if len(sys.argv) < 2:
         print("Usage: python healthsim/pointsSystem.py data/ABC/Activity_Data.csv")
@@ -159,4 +183,10 @@ def main():
 # Inside main(), after saving the CSV:
 
 if __name__ == "__main__":
+    # Update these paths to match your actual file locations
+    # q_file = "data/ABC/Activity_Data.csv"
+    # pi_file = "data/ABC/Pi_Sensor_Data.csv"
+    # master_file = "data/ABC/Master_Combined_Activity.csv"
+    
+    # combine_activity_data(q_file, pi_file, master_file)
     main()
