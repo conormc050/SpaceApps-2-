@@ -1,0 +1,3 @@
+config/tags.local.json
+__pycache__/
+*.pyc

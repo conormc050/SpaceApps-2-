@@ -1,0 +1,14 @@
+{
+  "data_source": "SIMULATED",
+  "note": "Simulated demo tags only. Real card IDs are never stored here. Enrolling a real card writes a salted hash to config/tags.local.json, which is kept out of the repository.",
+  "ai_acknowledgement": "Code and simulated data in this project were generated with the help of AI tools (Anthropic Claude) and reviewed by the team.",
+  "salt": "SIMULATED-demo-salt",
+  "tags": {
+    "191476a0f6db7e9cf84cb33581a10e13a2807131aec50a2f120781001e2eb80a": "ABC",
+    "094c56a62d1c78154818a1226e65e221dbcf70f34f18e6a9b1fe5e77f91f946b": "DEF"
+  },
+  "simulated_uids": {
+    "ABC": "SIM-TAG-ABC",
+    "DEF": "SIM-TAG-DEF"
+  }
+}

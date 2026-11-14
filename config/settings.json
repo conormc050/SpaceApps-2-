@@ -1,0 +1,375 @@
+{
+  "meta": {
+    "project": "Astronaut health monitor, student hackathon project",
+    "data_source": "SIMULATED",
+    "file_prefix": "SIMULATED_",
+    "banner": "SIMULATED DATA",
+    "scenario_label": "ISS now, Mars-ready",
+    "disclaimer": "SIMULATED data generated for logic validation only, not accuracy. Not derived from any real person. Not medical data and not medical advice. Skin temperature is skin surface temperature, not core body temperature. Mood is a non-clinical self-reported wellbeing check-in. The blood-count trend is an exposure indicator only, with many possible causes; it is not a radiation dose.",
+    "ai_acknowledgement": "Code and simulated data in this project were generated with the help of AI tools (Anthropic Claude) and reviewed by the team.",
+    "threshold_note": "All thresholds are demo values, not clinical limits."
+  },
+  "simulation": {
+    "seed": 42,
+    "start_utc": "2026-11-01T00:00:00Z",
+    "timezone": "UTC",
+    "calibration_days": 7,
+    "scenario_days": 7,
+    "playback_seconds_per_simulated_week": 60
+  },
+  "schedule": {
+    "wake_utc": "06:00",
+    "bedtime_utc": "21:30",
+    "scheduled_sleep_h": 8.5,
+    "exercise_block_min": 120,
+    "sleep_scan_time_utc": "06:15",
+    "checkup_times_utc": ["07:00", "19:00"],
+    "on_time_window_min": 30,
+    "blood_panel_every_days": 2
+  },
+  "sleep": {
+    "mean_h": 6.0,
+    "night_sd_h": 0.35,
+    "between_person_sd_h": 0.7,
+    "crew_mean_h": {"ABC": 6.2, "DEF": 5.9},
+    "sleep_aid_tick": true,
+    "source": "Barger et al. 2014, Lancet Neurology, https://pmc.ncbi.nlm.nih.gov/articles/PMC4188436/",
+    "source_verified": false
+  },
+  "sensors": {
+    "wake_alarm_sd_min": 10,
+    "wake_alarm_limit_min": 30,
+    "sleep_h_limits": [3.5, 8.0],
+    "latency_min": [5, 20],
+    "linger_min": [5, 20],
+    "wake_events": [1, 4],
+    "wake_event_len_min": [2, 15],
+    "light_bouts_per_day": 8.0,
+    "light_bout_len_min": [5, 20],
+    "active_count_threshold": 150,
+    "exercise_count_threshold": 400,
+    "evening_dim_h": 2.0,
+    "hr_baseline_bpm": [60, 75],
+    "hr_circadian_amp": 4.0,
+    "hr_exercise_boost": [40, 70],
+    "hr_sensor_noise_sd": 3.0,
+    "hr_dropouts_per_day": 6.0,
+    "hr_exercise_dropout_prob": 0.05,
+    "ppg_fs_hz": 50,
+    "ppg_window_s": 30,
+    "ppg_every_min": 60,
+    "ppg_noise_sd": 0.05,
+    "ppg_motion_noise_mult": 2.5,
+    "ppg_hrv_sd": 0.03,
+    "ppg_dropout_prob": 0.1,
+    "temp_baseline_c": 34.0,
+    "temp_noise_sd": 0.05,
+    "temp_drift_sd": 0.15,
+    "temp_drift_tau_h": 6.0,
+    "temp_resolution_c": 0.0625,
+    "temp_missing_prob": 0.002,
+    "mood_missed_prob": 0.1,
+    "mood_checkin_delay_min": [0, 45]
+  },
+  "crew": {
+    "ABC": {
+      "initials": "ABC",
+      "scenario": "normal",
+      "seed_offset": 0,
+      "exercise_start_utc": "09:00",
+      "answer_style": "balanced",
+      "reference_range_set": "default",
+      "blood_baseline": {"rbc_million_per_ul": 4.9, "wbc_thousand_per_ul": 6.5, "platelets_thousand_per_ul": 260}
+    },
+    "DEF": {
+      "initials": "DEF",
+      "scenario": "worrying_trend",
+      "seed_offset": 1,
+      "exercise_start_utc": "13:30",
+      "answer_style": "balanced",
+      "reference_range_set": "default",
+      "blood_baseline": {"rbc_million_per_ul": 5.0, "wbc_thousand_per_ul": 7.0, "platelets_thousand_per_ul": 280}
+    }
+  },
+  "scenarios": {
+    "normal": {
+      "onset_after_days": null,
+      "ramp_days": 0,
+      "skin_temp_rise_c": 0.0,
+      "sleep_deficit_h": 0.0,
+      "resting_hr_rise_bpm": 0.0,
+      "wbc_drop_fraction": 0.0,
+      "platelet_drop_fraction": 0.0,
+      "expected_alerts": [],
+      "max_alert_delay_days": null
+    },
+    "worrying_trend": {
+      "onset_after_days": 8,
+      "ramp_days": 2,
+      "skin_temp_rise_c": 0.9,
+      "sleep_deficit_h": 1.5,
+      "resting_hr_rise_bpm": 12.0,
+      "wbc_drop_fraction": 0.25,
+      "platelet_drop_fraction": 0.25,
+      "expected_alerts": ["resting_hr", "skin_temp", "sleep", "blood_counts"],
+      "max_alert_delay_days": 4
+    }
+  },
+  "baselines": {
+    "calibration_days": 7,
+    "spreads_for_amber": 2.0,
+    "consecutive_days": 2,
+    "rule": "amber when the change from the personal baseline exceeds max(spreads_for_amber x own day-to-day spread, the indicator's fixed minimum) for consecutive_days in a row",
+    "baseline_set_in_flight": true,
+    "preflight_value_is_reference_only": true
+  },
+  "status_levels": ["green", "amber", "red"],
+  "alerts": {
+    "resting_hr": {
+      "lcd_label": "HEART",
+      "data": "simulated sensor",
+      "min_change": 10.0,
+      "unit": "BPM",
+      "direction": "above",
+      "days": 2,
+      "quick_help": "Sit 5 min, slow breathing, measure again",
+      "contact_when": "Still high after re-measuring, or you feel unwell"
+    },
+    "skin_temp": {
+      "lcd_label": "SKIN TEMP",
+      "data": "simulated sensor",
+      "min_change": 0.5,
+      "unit": "C",
+      "direction": "above",
+      "current_h": 24,
+      "baseline_h": 72,
+      "sustain_h": 6,
+      "quick_help": "Rest, check sensor fit and cabin temperature, measure again",
+      "contact_when": "Rise continues next day"
+    },
+    "sleep": {
+      "lcd_label": "SLEEP",
+      "data": "simulated sensor",
+      "min_change": 1.0,
+      "unit": "h",
+      "direction": "below",
+      "days": 2,
+      "red_after_nights": 3,
+      "quick_help": "Dim lights and cut noise an hour before bed",
+      "contact_when": "3 or more short nights"
+    },
+    "mood": {
+      "lcd_label": "MOOD",
+      "data": "self-report, non-clinical",
+      "quick_help": "Short break, talk to a crewmate, answer again",
+      "contact_when": "Low scores continue 3 more days"
+    },
+    "cabin_air": {
+      "lcd_label": "CABIN AIR",
+      "data": "simulated relative index",
+      "direction": "above",
+      "sustain_h": 1,
+      "quick_help": "Check vents, tell the crew lead",
+      "contact_when": "Does not clear"
+    },
+    "cabin_night": {
+      "lcd_label": "NOISE/LIGHT",
+      "data": "simulated sensor",
+      "direction": "above",
+      "quick_help": "Move, dim or use ear protection",
+      "contact_when": "Sleep stays short"
+    },
+    "blood_sugar": {
+      "lcd_label": "BLOOD SUGAR",
+      "data": "simulated, planned sensor",
+      "quick_help": "Log it, measure again, eat or drink per nutrition plan",
+      "contact_when": "Still out of range after re-measuring"
+    },
+    "blood_pressure": {
+      "lcd_label": "BLOOD PRESS",
+      "data": "simulated, planned sensor",
+      "min_change": 10.0,
+      "unit": "mmHg",
+      "direction": "above",
+      "readings": 2,
+      "same_body_position": true,
+      "quick_help": "Rest 5 min, measure again in the same position",
+      "contact_when": "Stays high"
+    },
+    "blood_counts": {
+      "lcd_label": "BLOOD COUNT",
+      "data": "simulated, exposure indicator only, not a dose",
+      "direction": "below",
+      "checkups": 2,
+      "min_drop_fraction": 0.15,
+      "requires_both": ["wbc", "platelets"],
+      "quick_help": "Nothing to self-treat",
+      "contact_when": "Straight away; many possible causes; not a dose"
+    }
+  },
+  "mood": {
+    "scale_min": 1,
+    "scale_max": 5,
+    "low_score": 2,
+    "low_days": 3,
+    "drop_in_a_day": 2,
+    "mismatch_days": 3,
+    "red_after_more_days": 3,
+    "send_to_earth_only_when_abnormal": true,
+    "astronaut_sees_flag_first": true,
+    "answer_style_weights": {"balanced": 1.0, "tends_to_say_fine": 0.6},
+    "follow_up_question": "Your sleep and heart data look different from your check-in. Is there anything you want to add?",
+    "questionnaire": {
+      "purpose": "Estimates answer style only. It adjusts how much the mood self-report is weighted. It never labels mood and is not clinical.",
+      "answer_scale": "1 strongly disagree to 5 strongly agree",
+      "items": [
+        {"text": "When someone asks how I am, I usually say fine without thinking.", "reverse": false},
+        {"text": "I mention it early when something feels off.", "reverse": true},
+        {"text": "I would rather finish the task than report a small problem.", "reverse": false},
+        {"text": "I find it easy to put how I feel on a number scale.", "reverse": true},
+        {"text": "I tend to pick the middle answer on surveys.", "reverse": false},
+        {"text": "I play down discomfort so the crew does not worry.", "reverse": false},
+        {"text": "My answers change when my day changes.", "reverse": true},
+        {"text": "I answer check-ins quickly to get them done.", "reverse": false},
+        {"text": "I tell a crewmate when I have slept badly.", "reverse": true},
+        {"text": "I think small complaints are not worth logging.", "reverse": false}
+      ],
+      "says_fine_threshold": 3.5
+    }
+  },
+  "scoring": {
+    "checkup_points": 100,
+    "sleep_scan_points": 120,
+    "on_time_bonus": 30,
+    "multiplier_start": 1.0,
+    "multiplier_step": 0.25,
+    "multiplier_cap": 2.0,
+    "multiplier_resets_on_miss": true,
+    "points_per_level": 1000,
+    "points_from_health_values": false
+  },
+  "lcd": {
+    "cols": 16,
+    "rows": 2,
+    "model_confirmed": false,
+    "custom_char_slots": 8,
+    "glyph_width": 5,
+    "glyph_height": 8,
+    "frame_ms": 250,
+    "scroll_ms": 300,
+    "png_pixel_scale": 6,
+    "screens": ["banner", "tag_login", "mode", "scanning", "status", "advice", "score", "scoreboard", "level_up"]
+  },
+  "serial": {
+    "baud": 9600,
+    "line_end": "\n",
+    "line_max_bytes": 40,
+    "glyph_char_base": 128,
+    "host_to_device": {
+      "L": "L<row digit><text padded to cols>  set one row; bytes 128-135 print custom characters 0-7",
+      "G": "G<slot digit><16 hex digits>  define a custom character, 2 hex digits per row, 8 rows, low 5 bits used",
+      "C": "C  clear the screen",
+      "S": "S<G|A|R|O>  status light green, amber, red or off",
+      "B": "B<milliseconds>  buzzer beep"
+    },
+    "device_to_host": {
+      "READY": "READY <cols> <rows>  sent once after reset",
+      "T": "T<tag id>  a tag was tapped; the host hashes it and never stores it",
+      "K": "K<1-4>  a button was pressed",
+      "V": "V<name>=<number>  an optional real sensor reading"
+    }
+  },
+  "hardware": {
+    "board": "Arduino Uno",
+    "note": "The Uno only draws frames, reads the tag reader and buttons, and drives the buzzer and lights. All processing runs on the host (laptop or Raspberry Pi) over USB serial.",
+    "lcd_parallel_pins": {"rs": 7, "en": 6, "d4": 5, "d5": 4, "d6": 3, "d7": 2},
+    "lcd_i2c": {"address": "0x27", "sda": "A4", "scl": "A5"},
+    "rc522_pins": {"ss": 10, "rst": 9, "mosi": 11, "miso": 12, "sck": 13, "supply": "3.3 V only"},
+    "buzzer_pin": 8,
+    "status_led_pins": {"green": "A0", "amber": "A1", "red": "A2"},
+    "button_pins_with_i2c_lcd": [2, 3, 4, 5],
+    "button_ladder_pin_with_parallel_lcd": "A3"
+  },
+  "link": {
+    "selected": "iss",
+    "batch_interval_min": 60,
+    "profiles": {
+      "iss": {"one_way_delay_s_min": 1, "one_way_delay_s_max": 2, "dropout_prob_per_batch": 0.1, "dropout_gap_min": [5, 20]},
+      "mars": {"one_way_delay_s_min": 180, "one_way_delay_s_max": 1320, "dropout_prob_per_batch": 0.1, "dropout_gap_min": [5, 20]}
+    }
+  },
+  "blood": {
+    "label": "SIMULATED blood panel, planned sensor",
+    "source": "Furniturewalla et al. 2018, Microsystems & Nanoengineering 4:20, https://www.nature.com/articles/s41378-018-0019-0",
+    "honesty_note": "The paper demonstrates cell counting. Telling cell types apart is listed there as future work, so the amplitude-based separation here is a simplification.",
+    "cytometer": {
+      "fs_hz": 1000,
+      "threshold_v": 0.5,
+      "min_run_samples": 4,
+      "pulse_width_ms": 6,
+      "overshoot_fraction": 0.3,
+      "noise_sd_v": 0.05,
+      "baseline_drift_v": 0.1,
+      "flow_ul_per_s": 0.1,
+      "run_seconds": 60,
+      "overlap_warning_fraction": 0.05,
+      "channels": {
+        "rbc_platelets": {"dilution_factor": 10000, "platelet_peak_v": [0.6, 1.0], "rbc_peak_v": [1.5, 2.5]},
+        "wbc": {"dilution_factor": 10, "red_cells_lysed": true, "wbc_peak_v": [1.5, 3.0]}
+      }
+    },
+    "reference_ranges": {
+      "verified": false,
+      "default": {
+        "rbc_million_per_ul": [4.2, 5.9],
+        "wbc_thousand_per_ul": [4.0, 11.0],
+        "platelets_thousand_per_ul": [150, 400]
+      }
+    },
+    "checkup_cv": 0.04
+  },
+  "blood_sugar": {
+    "label": "SIMULATED blood sugar, planned sensor",
+    "unit": "mg/dL",
+    "personal_usual_range": [70, 140],
+    "mean": 98,
+    "sd": 10
+  },
+  "blood_pressure": {
+    "label": "SIMULATED blood pressure, planned sensor",
+    "unit": "mmHg",
+    "body_positions": ["restrained", "free_floating", "after_exercise"],
+    "systolic_mean": 118,
+    "diastolic_mean": 76,
+    "sd": 5,
+    "after_exercise_systolic_offset": 15
+  },
+  "cabin": {
+    "label": "SIMULATED cabin environment",
+    "air_quality_note": "Relative index only, not a gas concentration.",
+    "baseline": {
+      "air_quality_index": 100,
+      "humidity_pct": 45,
+      "temperature_c": 23,
+      "pressure_kpa": 101.3,
+      "night_noise_db": 50,
+      "night_light_lux": 2
+    },
+    "day_to_day_sd": {
+      "air_quality_index": 15,
+      "humidity_pct": 4,
+      "temperature_c": 0.6,
+      "pressure_kpa": 0.3,
+      "night_noise_db": 3,
+      "night_light_lux": 1.5
+    },
+    "built_in_effects": {
+      "night_noise_db_on_sleep_h": -0.04,
+      "night_light_lux_on_sleep_h": -0.05,
+      "air_quality_index_on_mood": -0.01,
+      "humidity_pct_on_sleep_h": 0.0
+    },
+    "recovery_tolerance_fraction": 0.5,
+    "wording": "possible contributors, never causes"
+  }
+}

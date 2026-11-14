@@ -1,0 +1,194 @@
+{
+  "data_source": "SIMULATED",
+  "disclaimer": "SIMULATED data generated for logic validation only, not accuracy. Not derived from any real person. Not medical data and not medical advice. Skin temperature is skin surface temperature, not core body temperature. Mood is a non-clinical self-reported wellbeing check-in. The blood-count trend is an exposure indicator only, with many possible causes; it is not a radiation dose.",
+  "ai_acknowledgement": "Code and simulated data in this project were generated with the help of AI tools (Anthropic Claude) and reviewed by the team.",
+  "threshold_note": "All thresholds are demo values, not clinical limits.",
+  "scenario_label": "ISS now, Mars-ready",
+  "crew": "DEF",
+  "initials": "DEF",
+  "scenario": "worrying_trend",
+  "scenario_settings": {
+    "onset_after_days": 8,
+    "ramp_days": 2,
+    "skin_temp_rise_c": 0.9,
+    "sleep_deficit_h": 1.5,
+    "resting_hr_rise_bpm": 12.0,
+    "wbc_drop_fraction": 0.25,
+    "platelet_drop_fraction": 0.25,
+    "expected_alerts": [
+      "resting_hr",
+      "skin_temp",
+      "sleep",
+      "blood_counts"
+    ],
+    "max_alert_delay_days": 4
+  },
+  "scenario_onset_utc": "2026-11-09T00:00:00Z",
+  "timezone": "UTC",
+  "start_utc": "2026-11-01T00:00:00Z",
+  "days": 14,
+  "calibration_days": 7,
+  "scenario_days": 7,
+  "seed": 43,
+  "sleep_mean_h": 5.9,
+  "sleep_night_sd_h": 0.35,
+  "scheduled_sleep_h": 8.5,
+  "sleep_deficit_applied_at": "scheduled bedtime of each night, scaled by the scenario ramp",
+  "exercise": "one scheduled block of 120 min per day at 13:30 UTC",
+  "steps": "none; microgravity has no steps, so movement_minute and exercise_minute are used",
+  "sensor_model": {
+    "wake_alarm_sd_min": 10,
+    "wake_alarm_limit_min": 30,
+    "sleep_h_limits": [
+      3.5,
+      8.0
+    ],
+    "latency_min": [
+      5,
+      20
+    ],
+    "linger_min": [
+      5,
+      20
+    ],
+    "wake_events": [
+      1,
+      4
+    ],
+    "wake_event_len_min": [
+      2,
+      15
+    ],
+    "light_bouts_per_day": 8.0,
+    "light_bout_len_min": [
+      5,
+      20
+    ],
+    "active_count_threshold": 150,
+    "exercise_count_threshold": 400,
+    "evening_dim_h": 2.0,
+    "hr_baseline_bpm": [
+      60,
+      75
+    ],
+    "hr_circadian_amp": 4.0,
+    "hr_exercise_boost": [
+      40,
+      70
+    ],
+    "hr_sensor_noise_sd": 3.0,
+    "hr_dropouts_per_day": 6.0,
+    "hr_exercise_dropout_prob": 0.05,
+    "ppg_fs_hz": 50,
+    "ppg_window_s": 30,
+    "ppg_every_min": 60,
+    "ppg_noise_sd": 0.05,
+    "ppg_motion_noise_mult": 2.5,
+    "ppg_hrv_sd": 0.03,
+    "ppg_dropout_prob": 0.1,
+    "temp_baseline_c": 34.0,
+    "temp_noise_sd": 0.05,
+    "temp_drift_sd": 0.15,
+    "temp_drift_tau_h": 6.0,
+    "temp_resolution_c": 0.0625,
+    "temp_missing_prob": 0.002,
+    "mood_missed_prob": 0.1,
+    "mood_checkin_delay_min": [
+      0,
+      45
+    ]
+  },
+  "sample_rates": {
+    "imu_activity": "1 per minute (epoch summary)",
+    "light_sound": "1 per minute",
+    "heart_rate_minute": "1 per minute",
+    "ppg_raw": "50 Hz, 30 s window every 60 min",
+    "skin_surface_temp": "1 per minute, 0.0625 C resolution",
+    "mood": "1 check-in per day"
+  },
+  "state_codes": {
+    "0": "asleep",
+    "1": "in_bed_awake",
+    "2": "sedentary",
+    "3": "light_activity",
+    "4": "exercise"
+  },
+  "ground_truth_columns": {
+    "sleep_minute": [
+      "true_asleep",
+      "true_in_bed",
+      "night_id"
+    ],
+    "sleep_nights_truth": [
+      "true_sleep_min",
+      "true_wake_events",
+      "true_waso_min",
+      "true_sleep_deficit_h"
+    ],
+    "activity_minute": [
+      "true_state"
+    ],
+    "exercise_sessions_truth": [
+      "start",
+      "end",
+      "minutes"
+    ],
+    "heart_rate_minute": [
+      "true_bpm",
+      "dropout",
+      "true_resting_hr_offset_bpm"
+    ],
+    "ppg_windows": [
+      "true_state",
+      "true_bpm_window",
+      "true_bpm_minute",
+      "dropout_s"
+    ],
+    "skin_temp_minute": [
+      "true_injected_offset_c",
+      "true_rise_active"
+    ],
+    "mood_daily": [
+      "true_mood_1to5"
+    ]
+  },
+  "simulated_person_hr_baseline_bpm": 71.4,
+  "files": {
+    "sleep_minute": {
+      "path": "SIMULATED_sleep_minute.csv",
+      "rows": 20160
+    },
+    "sleep_nights_truth": {
+      "path": "SIMULATED_sleep_nights_truth.csv",
+      "rows": 13
+    },
+    "activity_minute": {
+      "path": "SIMULATED_activity_minute.csv",
+      "rows": 20160
+    },
+    "exercise_sessions_truth": {
+      "path": "SIMULATED_exercise_sessions_truth.csv",
+      "rows": 14
+    },
+    "heart_rate_minute": {
+      "path": "SIMULATED_heart_rate_minute.csv",
+      "rows": 20160
+    },
+    "ppg_windows": {
+      "path": "SIMULATED_ppg_windows.csv",
+      "rows": 336
+    },
+    "ppg_raw": {
+      "path": "SIMULATED_ppg_raw.csv",
+      "rows": 504000
+    },
+    "skin_temp_minute": {
+      "path": "SIMULATED_skin_temp_minute.csv",
+      "rows": 20160
+    },
+    "mood_daily": {
+      "path": "SIMULATED_mood_daily.csv",
+      "rows": 14
+    }
+  }
+}
