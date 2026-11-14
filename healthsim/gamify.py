@@ -3,8 +3,11 @@ import pandas as pd
 
 ACTIVE_COUNT_THR = 150
 EXERCISE_COUNT_THR = 400
-
+# take out the sleep counting for points we dont really need that mf.
 RULES = {
+    "active_count_thr": 150,
+    "exercise_count_thr":400,
+    "full_day_minutes": 1440,
     "sleep_full_h": 7.0,
     "sleep_full_pts": 30,
     "sleep_partial_h": 6.0,
@@ -21,18 +24,28 @@ RULES = {
     "wear_pts": 10,
     "streak_pts_per_day": 5,
     "streak_cap": 25,
+
+    "mission_days": 30,
+
+    
 }
 
+def _cfg(rules=None):
+    return {**RULES, **(rules or {})}
 
-def daily_activity(act):
-    d = act.assign(date=act["timestamp"].dt.date)
-    g = d.groupby("date")
-    return pd.DataFrame(
+PTS_COLS =["pts_steps", "pts_active", "pts_exercise", "pts_checkin", "pts_wear", "pts_streak", "pts_mission"]
+
+def daily_activity(act, rules=None):
+    r=_cfg(rules)
+    d = act.assign(
+        date=act["timestamp"].dt.date,
+        active=act["activity_count"] >= r["active_count_thr"],
+        exercise=act["activity_count"] >= r["exercise_count_thr"],
+    )
+    return (
         {
-            "steps": g["steps"].sum(),
-            "active_min": g["activity_count"].apply(lambda s: int((s >= ACTIVE_COUNT_THR).sum())),
-            "exercise_min": g["activity_count"].apply(lambda s: int((s >= EXERCISE_COUNT_THR).sum())),
-            "minutes_recorded": g.size(),
+            d.groupby("date")
+              .agg(steps=("steps", "sum"), active_min=("active", "sum"), exercise_min=("exercise", "sum"), minutes_recorded=("timestamp", lambda x: x.dt.minute.count()))
         }
     ).reset_index()
 
@@ -44,14 +57,17 @@ def daily_mood(mood):
     return m[["date", "mood_self_report_1to5", "checkin_done"]]
 
 
-def build_daily_summary(activity_daily, sleep_nightly, hr_daily, temp_daily, mood_daily):
-    s = activity_daily.copy()
-    sl = sleep_nightly.rename(columns={"sleep_date": "date"})[["date", "est_sleep_min", "est_sleep_h", "est_wake_bouts"]]
+def build_daily_summary(activity_daily, sleep_nightly, hr_daily, temp_daily, mood_daily, rules=None):
+    r = _cfg(rules)
+    s=activity_daily.copy()
+    sl = sleep_nightly.rename(columns={"sleep_date": "date"})[
+        ["date", "est_sleep_min", "est_sleep_h", "est_wake_bouts"]]
+    # sl = sleep_nightly.rename(columns={"sleep_date": "date"})[["date", "est_sleep_min", "est_sleep_h", "est_wake_bouts"]]
     for other in (sl, hr_daily, temp_daily, mood_daily):
         s = s.merge(other, on="date", how="left")
     s["checkin_done"] = s["checkin_done"].fillna(False).astype(bool)
-    s["full_day"] = s["minutes_recorded"] >= 1440
-    return s
+    s["full_day"] = s["minutes_recorded"] >= r["full_day_minutes"]
+    return s.sort_values("date").reset_index(drop=True)
 
 
 def checkin_streak(done):
@@ -82,3 +98,7 @@ def add_points(summary, rules=RULES):
     s["points_total"] = s[cols].sum(axis=1).astype(int)
     s["points_cumulative"] = s["points_total"].cumsum()
     return s
+
+def mission_Points(summary, rules=RULES):
+    s= summary.copy()
+    s["pts_mission"] = np.where(s["points_cumulative"] / rules["mission_days"], 100, 0)

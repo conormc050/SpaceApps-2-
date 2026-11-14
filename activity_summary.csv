@@ -1,0 +1,6 @@
+user_id,latest_date,active_minutes,exercise_minutes,avg_active_minutes,checked_in_24h,streak_days,has_streak,points
+1,2026-11-12,45,30,38.3,False,1,False,108
+1,2026-11-13,50,35,38.3,True,2,True,123
+1,2026-11-14,20,10,38.3,True,3,True,42
+2,2026-11-08,30,15,45.0,False,1,False,63
+2,2026-11-10,60,40,45.0,False,1,False,144
