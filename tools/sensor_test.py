@@ -1,4 +1,4 @@
-import argparse
+﻿import argparse
 import sys
 import time
 from pathlib import Path
@@ -97,36 +97,52 @@ def make_pir():
         return str(e)
 
 
+def dht_text():
+    dht = read_dht11()
+    if dht == "overlay_missing":
+        return "DHT11: no reading (add dtoverlay=dht11,gpiopin=%d to /boot/firmware/config.txt and reboot)" % PINS["dht11_gpio"]
+    if dht is None:
+        return "DHT11: no reading (check wiring: 3.3 V, GND and data on GPIO %d)" % PINS["dht11_gpio"]
+    return f"DHT11: {dht[0]:.0f} C  {dht[1]:.0f} % RH"
+
+
+def pir_text(pir):
+    if isinstance(pir, str):
+        return f"PIR: no reading ({pir})"
+    return "PIR: MOTION" if pir.motion_detected else "PIR: still"
+
+
+def pressure_text(pressure):
+    try:
+        pr = pressure.read()
+    except OSError:
+        pr = None
+    if isinstance(pr, tuple):
+        return f"PRESSURE: {pr[1]:.1f} hPa  {pr[0]:.1f} C"
+    return f"PRESSURE: no reading ({pr if pr else 'check wiring'})"
+
+
 def main():
     p = argparse.ArgumentParser(description="Print one line per interval from each real sensor on the Pi.")
+    p.add_argument("--only", nargs="+", choices=["dht11", "pir", "pressure"], default=["dht11", "pir", "pressure"], help="test only these sensors, for example --only dht11")
     p.add_argument("--count", type=int, default=0, help="stop after this many lines, 0 runs until Ctrl+C")
     a = p.parse_args()
-    pir = make_pir()
-    pressure = Pressure()
-    print(f"REAL sensor readings, not {config.SOURCE}. {PINS['dht11_label']}; {PINS['pir_label']}; {PINS['pressure_label']}.")
-    print(f"pressure chip id: {hex(pressure.chip) if pressure.addr is not None else 'none'}  (0x58 = BMP280, 0x60 = BME280)")
+    pir = make_pir() if "pir" in a.only else None
+    pressure = Pressure() if "pressure" in a.only else None
+    labels = {"dht11": PINS["dht11_label"], "pir": PINS["pir_label"], "pressure": PINS["pressure_label"]}
+    print(f"REAL sensor readings, not {config.SOURCE}. Testing: " + "; ".join(labels[k] for k in a.only) + ".")
+    if pressure is not None:
+        print(f"pressure chip id: {hex(pressure.chip) if pressure.addr is not None else 'none'}  (0x58 = BMP280, 0x60 = BME280)")
     n = 0
     while True:
-        dht = read_dht11()
-        if dht == "overlay_missing":
-            dht_text = "DHT11: no reading (add dtoverlay=dht11,gpiopin=%d to /boot/firmware/config.txt and reboot)" % PINS["dht11_gpio"]
-        elif dht is None:
-            dht_text = "DHT11: no reading (check wiring)"
-        else:
-            dht_text = f"DHT11: {dht[0]:.0f} C  {dht[1]:.0f} % RH"
-        if isinstance(pir, str):
-            pir_text = f"PIR: no reading ({pir})"
-        else:
-            pir_text = "PIR: MOTION" if pir.motion_detected else "PIR: still"
-        try:
-            pr = pressure.read()
-        except OSError:
-            pr = None
-        if isinstance(pr, tuple):
-            pr_text = f"PRESSURE: {pr[1]:.1f} hPa  {pr[0]:.1f} C"
-        else:
-            pr_text = f"PRESSURE: no reading ({pr if pr else 'check wiring'})"
-        print(f"{time.strftime('%H:%M:%S')}  {dht_text} | {pir_text} | {pr_text}", flush=True)
+        parts = []
+        if "dht11" in a.only:
+            parts.append(dht_text())
+        if "pir" in a.only:
+            parts.append(pir_text(pir))
+        if "pressure" in a.only:
+            parts.append(pressure_text(pressure))
+        print(f"{time.strftime('%H:%M:%S')}  " + " | ".join(parts), flush=True)
         n += 1
         if a.count and n >= a.count:
             break
