@@ -13,7 +13,7 @@ PINS = config.section("hardware")["pi_sensors"]
 def read_dht11():
     for dev in sorted(Path("/sys/bus/iio/devices").glob("iio:device*")):
         try:
-            if (dev / "name").read_text().strip() != PINS["dht11_sysfs_name"]:
+            if not (dev / "name").read_text().strip().startswith(PINS["dht11_sysfs_name"]):
                 continue
         except OSError:
             continue
