@@ -303,6 +303,19 @@
       "retries": 3
     }
   },
+  "live": {
+    "label": "Live readings received from the wearable over Bluetooth, stored on the Pi and served to the web app",
+    "bluetooth_port": "/dev/rfcomm0",
+    "db_path": "data/live/live.db",
+    "http_host": "0.0.0.0",
+    "http_port": 8080,
+    "reconnect_s": 3,
+    "default_limit": 500,
+    "values": {
+      "hr": {"label": "heart rate", "unit": "BPM", "range": [30, 220]}
+    },
+    "simulate": {"interval_s": 1.0, "hr_mean": 66, "hr_sd": 4, "crew": "ABC"}
+  },
   "link": {
     "selected": "iss",
     "batch_interval_min": 60,
