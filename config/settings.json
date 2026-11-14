@@ -288,7 +288,20 @@
     "buzzer_pin": 8,
     "status_led_pins": {"green": "A0", "amber": "A1", "red": "A2"},
     "button_pins_with_i2c_lcd": [2, 3, 4, 5],
-    "button_ladder_pin_with_parallel_lcd": "A3"
+    "button_ladder_pin_with_parallel_lcd": "A3",
+    "pi_sensors": {
+      "note": "Sensors wired to the Raspberry Pi 5. GPIO numbers are BCM. Readings are REAL and are labelled as cabin readings, never skin temperature.",
+      "dht11_gpio": 4,
+      "dht11_sysfs_name": "dht11",
+      "dht11_label": "cabin temperature and humidity (DHT11-type module, not skin temperature)",
+      "pir_gpio": 17,
+      "pir_label": "room motion (PIR, presence only, not wrist movement)",
+      "pressure_i2c_bus": 1,
+      "pressure_i2c_addresses": ["0x76", "0x77"],
+      "pressure_label": "cabin pressure (BMP280-type module)",
+      "read_interval_s": 2.0,
+      "retries": 3
+    }
   },
   "link": {
     "selected": "iss",
