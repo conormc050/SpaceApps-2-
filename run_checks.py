@@ -4,17 +4,19 @@ import re
 import shutil
 import sys
 import tempfile
+import threading
+import urllib.request
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
-from healthsim import config, gamify, heart, pipeline, protocol, simulate, tags
+from healthsim import bridge, config, gamify, heart, pipeline, protocol, simulate, tags
 from healthsim.loaders import PREFIX, SOURCE, load
 
 SECTIONS = [
     "meta", "simulation", "schedule", "sleep", "sensors", "crew", "scenarios", "baselines", "alerts", "mood",
-    "scoring", "lcd", "serial", "hardware", "link", "blood", "blood_sugar", "blood_pressure", "cabin",
+    "scoring", "lcd", "serial", "hardware", "live", "link", "blood", "blood_sugar", "blood_pressure", "cabin",
 ]
 
 STRESS = {
@@ -274,6 +276,69 @@ def check_determinism(rep, root):
     rep.check("determinism", "unknown simulator setting is refused", bad)
 
 
+def fetch(port, path):
+    with urllib.request.urlopen(f"http://127.0.0.1:{port}{path}", timeout=5) as r:
+        return json.loads(r.read().decode("utf-8")), r.headers
+
+
+def check_bridge(rep):
+    store = bridge.Store(":memory:")
+    b = bridge.Bridge(store, "REAL")
+    kinds = [b.handle(x) for x in (b"READY 16 2\n", b"TSIM-TAG-ABC\n", b"Vhr=72\n", b"Vhr=999\n", b"Vfoo=1\n", b"K2\n", b"garbage\n", b"TREALCARD-9\n")]
+    rows = store.readings()
+    rep.check("bridge", "wearable lines become readings, events and ignored noise", kinds == ["ready", "tag", "value", "value", "value", "button", None, "tag"] and len(rows) == 3 and b.ignored == 1)
+    rep.check("bridge", "readings are quality-tagged and carry the logged-in crew", [r["quality"] for r in rows] == ["ok", "out_of_range", "unknown_name"] and all(r["crew"] == "ABC" for r in rows) and rows[0]["unit"] == "BPM")
+    rep.check("bridge", "real readings labelled REAL, timestamps UTC with Z", all(r["data_source"] == "REAL" and r["timestamp"].endswith("Z") for r in rows))
+    ev = store.events()
+    dump = store.dump_text()
+    rep.check("bridge", "raw tag IDs are never stored, unknown tag does not log in", "SIM-TAG-ABC" not in dump and "REALCARD-9" not in dump and [e["kind"] for e in ev] == ["ready", "login", "button", "unknown_tag"] and b.active_crew == "ABC")
+
+    server = bridge.make_server(store, b, "127.0.0.1", 0)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    port = server.server_address[1]
+    try:
+        health, headers = fetch(port, "/api/health")
+        latest, _ = fetch(port, "/api/latest")
+        page, _ = fetch(port, "/api/readings?since=1&limit=5")
+        named, _ = fetch(port, "/api/readings?name=hr")
+        events, _ = fetch(port, "/api/events")
+        try:
+            fetch(port, "/api/readings?since=abc")
+            bad = False
+        except urllib.error.HTTPError as e:
+            bad = e.code == 400
+        rep.check("bridge", "HTTP API answers JSON with CORS for the web app", health["status"] == "ok" and headers["Access-Control-Allow-Origin"] == "*" and headers["Content-Type"] == "application/json")
+        rep.check("bridge", "every HTTP answer carries the disclaimer and AI acknowledgement", all("disclaimer" in x for x in (health, latest, page, events)))
+        rep.check("bridge", "latest, since, name and events queries work", latest["latest"]["hr"]["value"] == 999 and [r["id"] for r in page["readings"]] == [2, 3] and page["last_id"] == 3 and len(named["readings"]) == 2 and len(events["events"]) == 4)
+        rep.check("bridge", "bad query is refused with 400", bad)
+    finally:
+        server.shutdown()
+        server.server_close()
+
+    class FakeLink:
+        def __init__(self, chunks):
+            self.chunks = list(chunks)
+
+        def recv(self, n):
+            return self.chunks.pop(0) if self.chunks else b""
+
+    split_store = bridge.Store(":memory:")
+    split = bridge.Bridge(split_store, "REAL")
+    try:
+        bridge.feed_lines(FakeLink([b"Vhr=6", b"8\r\nVhr=", b"70\r\n\r\nK1\r", b"\nVhr=7"]), split)
+        closed = False
+    except ConnectionError:
+        closed = True
+    rep.check("bridge", "Bluetooth reader joins split chunks into lines, skips blanks, reports a closed link", closed and [r["value"] for r in split_store.readings()] == [68.0, 70.0] and [e["kind"] for e in split_store.events()] == ["button"])
+
+    sim_store = bridge.Store(":memory:")
+    sim = bridge.Bridge(sim_store, "SIMULATED")
+    bridge.simulate(sim, count=20, interval_s=0)
+    sr = sim_store.readings()
+    lo, hi = config.section("live")["values"]["hr"]["range"]
+    rep.check("bridge", "simulate mode feeds 20 plausible readings all labelled SIMULATED", len(sr) == 20 and all(r["data_source"] == "SIMULATED" and r["quality"] == "ok" and lo <= r["value"] <= hi for r in sr) and sim.active_crew == config.section("live")["simulate"]["crew"])
+
+
 def run_scenario(rep, root, scenario, seed, overrides, limits):
     print(f"\n== {scenario} (seed {seed}) ==")
     d = root / scenario
@@ -305,6 +370,8 @@ def main():
         print("\n== rules and determinism ==")
         check_rules(rep)
         check_determinism(rep, root)
+        print("\n== bridge ==")
+        check_bridge(rep)
     finally:
         if a.keep:
             print(f"\nkept generated data in {root}")

@@ -1,3 +1,4 @@
 config/tags.local.json
 __pycache__/
 *.pyc
+data/live/
