@@ -85,7 +85,27 @@ k2.metric("Humidity", f"{state['cabin']['humidity_pct']:.0f} %")
 k3.metric("Pressure", f"{state['cabin']['pressure_kpa']:.1f} kPa")
 
 st.subheader("Score")
-s1, s2 = st.columns(2)
-s1.metric("This check-up", f"+{state['score']['points']}", f"x{state['score']['multiplier']:.2f} multiplier")
-s2.dataframe(pd.DataFrame(state["scoreboard"]), hide_index=True)
-st.caption("Points reward taking check-ups, never health values. Scoreboard values are examples.")
+st.metric("This check-up", f"+{state['score']['points']}", f"x{state['score']['multiplier']:.2f} multiplier")
+
+mission = next(m for m in state["missions"] if crew_id in [c["Crew"] for c in m["crew"]])
+total = sum(c["Points"] for c in mission["crew"])
+mine = next(c["Points"] for c in mission["crew"] if c["Crew"] == crew_id)
+st.subheader(f"Mission scoreboard: {mission['name']}")
+m1, m2 = st.columns(2)
+m1.metric("Mission total", f"{total:,}")
+m1.caption("All crew members combined")
+m2.metric(f"{crew_id} contributed", f"{mine:,}")
+m2.caption(f"{mine / total:.1%} of the mission total")
+ranked = sorted(mission["crew"], key=lambda c: -c["Points"])
+board = pd.DataFrame(
+    [
+        {"Rank": i + 1, "Crew": c["Crew"] + ("  (you)" if c["Crew"] == crew_id else ""), "Points": c["Points"], "Share of mission total": 100 * c["Points"] / total}
+        for i, c in enumerate(ranked)
+    ]
+)
+st.dataframe(
+    board,
+    hide_index=True,
+    column_config={"Share of mission total": st.column_config.ProgressColumn("Share of mission total", format="%.1f%%", min_value=0, max_value=100)},
+)
+st.caption("Points reward taking check-ups, never health values. Example missions and crews, all simulated.")

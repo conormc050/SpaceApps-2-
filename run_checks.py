@@ -519,9 +519,33 @@ def check_screencast(rep, root):
     rep.check("screencast", "vitals page for ABC shows the wrist BPM and green, with no alerts", abc_ok, f"{abc_metrics.get('Heart rate')}")
     rep.check("screencast", "vitals page for DEF shows the wrist BPM, amber and the surgeon contact with the not-a-dose caution", def_ok, f"{def_metrics.get('Heart rate')}")
     rep.check("screencast", "vitals page is labelled SIMULATED, not medical advice, skin surface temperature and no health-value points", label_ok)
-    rep.check("screencast", "page, state and rules come from settings, scoreboard sorted by points", state["rules"]["hr"] == config.alert("resting_hr")["min_change"] and [r["Points"] for r in state["scoreboard"]] == sorted((r["Points"] for r in state["scoreboard"]), reverse=True))
-    board = config.ROOT / "assets" / record_demo.LEADERBOARD_NAME
-    rep.check("screencast", "committed leaderboard screenshot exists, is a wide PNG under 10 MB", board.exists() and Image.open(board).size[0] >= 1200 and board.stat().st_size < 10 * 1024 * 1024, f"{Image.open(board).size}" if board.exists() else "missing")
+    rep.check("screencast", "page, state and rules come from settings", state["rules"]["hr"] == config.alert("resting_hr")["min_change"])
+    missions = state["missions"]
+    names = [c["Crew"] for m in missions for c in m["crew"]]
+    rep.check(
+        "screencast",
+        "two fictional missions with four crew each, ABC and DEF in different missions, no real names",
+        len(missions) == 2 and all(len(m["crew"]) == 4 for m in missions) and len(set(names)) == 8 and all(re.fullmatch(r"[A-Z]{3}", x) for x in names) and all(m["name"].startswith("Demo Mission") for m in missions)
+        and "ABC" in [c["Crew"] for c in missions[0]["crew"]] and "DEF" in [c["Crew"] for c in missions[1]["crew"]],
+    )
+    shares_ok = True
+    for crew_id, mission in (("ABC", missions[0]), ("DEF", missions[1])):
+        total = sum(c["Points"] for c in mission["crew"])
+        mine = next(c["Points"] for c in mission["crew"] if c["Crew"] == crew_id)
+        os.chdir(wt)
+        try:
+            t = AppTest.from_file(str(page), default_timeout=60).run()
+            t.radio[0].set_value(crew_id)
+            t.button[0].click()
+            t.run()
+            metrics = {m.label: m.value for m in t.metric}
+            captions = " ".join(c.value for c in t.caption)
+        finally:
+            os.chdir(cwd)
+        shares_ok = shares_ok and metrics.get("Mission total") == f"{total:,}" and metrics.get(f"{crew_id} contributed") == f"{mine:,}" and f"{mine / total:.1%} of the mission total" in captions
+    rep.check("screencast", "mission board shows the mission total and each member's own contribution and share", shares_ok)
+    boards = [config.ROOT / "assets" / name for name in record_demo.LEADERBOARD_NAMES.values()]
+    rep.check("screencast", "both committed mission leaderboard screenshots exist as wide PNGs under 10 MB", all(b.exists() and Image.open(b).size[0] >= 1200 and b.stat().st_size < 10 * 1024 * 1024 for b in boards), ", ".join(b.name for b in boards))
     video = config.ROOT / "assets" / record_demo.OUT_NAME
     seconds, dims = probe_video(video) if video.exists() else (0, None)
     rep.check("screencast", "committed screencast is a 1920x1080 MP4 of about 3 minutes under 10 MB", video.exists() and dims == (1920, 1080) and 120 <= seconds <= 210 and video.stat().st_size < 10 * 1024 * 1024, f"{seconds:.0f} s, {video.stat().st_size / 1024 / 1024:.1f} MB" if video.exists() else "missing")

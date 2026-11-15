@@ -14,6 +14,10 @@ FPS = 10
 OUT_SIZE = (1280, 720)
 SCENES = [("title", 0.0, 3.0), ("abc_check", 3.0, 13.0), ("abc_web", 13.0, 21.0), ("def_run", 21.0, 30.5), ("def_web", 30.5, 40.5), ("end", 40.5, 44.5)]
 EXAMPLE_SCOREBOARD = (("ABC", 14000), ("DEF", 12490))
+EXAMPLE_MISSIONS = (
+    {"name": "Demo Mission North", "crew": (("ABC", 14000), ("GHI", 13120), ("JKL", 12540), ("MNO", 12650))},
+    {"name": "Demo Mission South", "crew": (("DEF", 12490), ("PQR", 13880), ("STU", 12960), ("VWX", 13200))},
+)
 
 
 def demo_numbers(data_root=None):

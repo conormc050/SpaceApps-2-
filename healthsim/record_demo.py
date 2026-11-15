@@ -10,11 +10,11 @@ import urllib.request
 from pathlib import Path
 
 from . import config
-from .demo_video import EXAMPLE_SCOREBOARD, demo_numbers
+from .demo_video import EXAMPLE_MISSIONS, demo_numbers
 
 PORT = 8611
 OUT_NAME = "slide4_demo_screencast.mp4"
-LEADERBOARD_NAME = "slide4_leaderboard.png"
+LEADERBOARD_NAMES = {"ABC": "slide4_leaderboard_north.png", "DEF": "slide4_leaderboard_south.png"}
 HEADER = "user_id,date,active_minutes,exercise_minutes,posture_change,back_hip_aches,mental_health_score,last_checkin\n"
 
 OVERLAY = """
@@ -72,7 +72,7 @@ def export_state(worktree, numbers):
         "quick_help": {"resting_hr": alerts["resting_hr"]["quick_help"], "sleep": alerts["sleep"]["quick_help"]},
         "cabin": config.section("cabin")["baseline"],
         "score": {"points": sc["checkup_points"] + sc["on_time_bonus"], "multiplier": sc["multiplier_start"] + sc["multiplier_step"]},
-        "scoreboard": [{"Rank": i + 1, "Crew": name, "Points": pts} for i, (name, pts) in enumerate(EXAMPLE_SCOREBOARD)],
+        "missions": [{"name": m["name"], "crew": [{"Crew": c, "Points": p} for c, p in m["crew"]]} for m in EXAMPLE_MISSIONS],
     }
     path = Path(worktree) / "data" / "demo" / "demo_state.json"
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -290,8 +290,8 @@ def screenshot_leaderboard(worktree, out_dir):
     export_state(worktree, n)
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
-    path = out / LEADERBOARD_NAME
     app = start_app(worktree)
+    paths = []
     try:
         with sync_playwright() as pw:
             browser = pw.chromium.launch()
@@ -302,16 +302,21 @@ def screenshot_leaderboard(worktree, out_dir):
             page.goto(f"http://localhost:{PORT}")
             page.wait_for_selector("text=Health Activity & Telemetry Hub")
             page.get_by_role("link", name="Live Vitals").first.click()
-            page.get_by_role("button", name="Log in with tag").click()
-            page.wait_for_selector("text=Welcome, ABC")
-            page.get_by_text("Points reward taking check-ups").scroll_into_view_if_needed()
-            page.mouse.move(40, 1040)
-            page.wait_for_timeout(1500)
-            page.screenshot(path=str(path), clip={"x": 300, "y": 700, "width": 1620, "height": 380})
+            for crew_id, name in LEADERBOARD_NAMES.items():
+                page.get_by_text(crew_id, exact=True).first.click()
+                page.get_by_role("button", name="Log in with tag").click()
+                page.wait_for_selector(f"text=Welcome, {crew_id}")
+                page.get_by_text("Points reward taking check-ups").scroll_into_view_if_needed()
+                page.mouse.move(40, 1040)
+                page.wait_for_timeout(2000)
+                top = page.get_by_role("heading", name="Score", exact=True).bounding_box()["y"] - 30
+                path = out / name
+                page.screenshot(path=str(path), clip={"x": 300, "y": max(0, top), "width": 1620, "height": 1080 - max(0, top)})
+                paths.append(path)
             browser.close()
     finally:
         app.terminate()
-    return path
+    return paths
 
 
 def main():
@@ -322,7 +327,8 @@ def main():
     p.add_argument("--speed", type=float, default=0.85, help="scales every pause: 1.0 is the slowest pacing, 0.2 is a fast dry run")
     a = p.parse_args()
     if a.leaderboard:
-        print(screenshot_leaderboard(a.worktree, a.out))
+        for path in screenshot_leaderboard(a.worktree, a.out):
+            print(path)
         return
     mp4 = record(a.worktree, a.out, a.speed)
     print(f"{mp4}  {mp4.stat().st_size / 1024 / 1024:.1f} MB")
