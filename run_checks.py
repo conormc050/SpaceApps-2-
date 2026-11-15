@@ -1,7 +1,9 @@
 import argparse
 import json
+import os
 import re
 import shutil
+import subprocess
 import sys
 import tempfile
 import threading
@@ -11,12 +13,14 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from healthsim import bridge, config, gamify, heart, pipeline, protocol, simulate, tags
+from PIL import Image
+
+from healthsim import bridge, config, demo_video, diagrams, gamify, heart, pipeline, protocol, simulate, tags
 from healthsim.loaders import PREFIX, SOURCE, load
 
 SECTIONS = [
     "meta", "simulation", "schedule", "sleep", "sensors", "crew", "scenarios", "baselines", "alerts", "mood",
-    "scoring", "lcd", "serial", "hardware", "live", "link", "blood", "blood_sugar", "blood_pressure", "cabin",
+    "scoring", "lcd", "serial", "hardware", "brand", "live", "link", "blood", "blood_sugar", "blood_pressure", "cabin",
 ]
 
 STRESS = {
@@ -395,6 +399,134 @@ def check_bridge(rep):
     rep.check("bridge", "simulate mode feeds 20 plausible readings all labelled SIMULATED", len(sr) == 20 and all(r["data_source"] == "SIMULATED" and r["quality"] == "ok" and lo <= r["value"] <= hi for r in sr) and sim.active_crew == config.section("live")["simulate"]["crew"])
 
 
+def check_diagrams(rep, root):
+    made = diagrams.render(root / "pictures")
+    pic = config.section("brand")["picture"]
+    sizes_ok = all(Image.open(p).size == (pic["width"], pic["height"]) and p.stat().st_size < 10 * 1024 * 1024 for p, _ in made.values())
+    rep.check("diagrams", "both deck pictures are 1920x1080 PNGs under 10 MB", len(made) == 2 and sizes_ok, ", ".join(p.name for p, _ in made.values()))
+    texts = {k: " | ".join(t) for k, (_, t) in made.items()}
+    rep.check("diagrams", "every picture carries the SIMULATED banner and the not-medical-advice line", all(config.BANNER in t and "Not medical advice" in t for t in texts.values()))
+    sc = config.section("scoring")
+    two = texts["two_checks"]
+    rep.check(
+        "diagrams",
+        "score slide uses the scoring settings and says points never come from health values",
+        f"+{sc['checkup_points']} check-up" in two and f"+{sc['sleep_scan_points']} sleep scan" in two and f"+{sc['on_time_bonus']} on time" in two
+        and f"+{sc['multiplier_step']:.2f}" in two and "never health values" in two,
+    )
+    rep.check("diagrams", "blood panel is labelled planned, exposure indicator only and not a radiation dose", "planned sensor" in two and "Exposure indicator only" in two and "Not a radiation dose" in two)
+    rep.check("diagrams", "real and simulated inputs are marked, no steps and no NASA branding", all("REAL" in t and "SIM" in t and "step" not in t.lower() and "nasa" not in t.lower() for t in texts.values()))
+    palette = config.section("brand")["palette"]
+    rep.check("diagrams", "brand palette is valid hex colours", all(re.fullmatch(r"#[0-9A-Fa-f]{6}", v) for v in palette.values()), f"{len(palette)} colours")
+
+
+def check_demo_video(rep, root):
+    simulate.generate(root / "demo_data")
+    n = demo_video.demo_numbers(root / "demo_data")
+    abc, dfn = n["ABC"], n["DEF"]
+    hr_rule = config.alert("resting_hr")["min_change"]
+    skin_rule = config.alert("skin_temp")["min_change"]
+    sleep_rule = config.alert("sleep")["min_change"]
+    blood_rule = config.alert("blood_counts")["min_drop_fraction"]
+    abc_quiet = abs(abc["hr_now"] - abc["hr_base"]) < hr_rule and abs(abc["skin_now"] - abc["skin_base"]) < skin_rule and abc["sleep_base"] - abc["sleep_now"] < sleep_rule
+    rep.check("demo video", "ABC demo numbers sit inside every alert rule, so ABC shows green", abc_quiet, f"HR {abc['hr_base']}->{abc['hr_now']}")
+    wbc_drop = 1 - dfn["wbc_now"] / dfn["wbc_base"]
+    plt_drop = 1 - dfn["plt_now"] / dfn["plt_base"]
+    def_drift = (
+        dfn["hr_now"] - dfn["hr_base"] >= hr_rule
+        and dfn["skin_now"] - dfn["skin_base"] >= skin_rule
+        and dfn["sleep_base"] - dfn["sleep_now"] >= sleep_rule
+        and wbc_drop >= blood_rule
+        and plt_drop >= blood_rule
+    )
+    rep.check("demo video", "DEF demo numbers cross every alert rule they claim to show", def_drift, f"HR {dfn['hr_base']}->{dfn['hr_now']}, skin +{dfn['skin_now'] - dfn['skin_base']:.1f}, sleep {dfn['sleep_now'] - dfn['sleep_base']:+.1f}")
+    times = [i * 2.0 for i in range(int(demo_video.duration() // 2))]
+    frames = {t: demo_video.frame_at(t, n) for t in times}
+    rep.check(
+        "demo video",
+        "every sampled frame carries the SIMULATED banner and the not-medical-advice line, with no NASA or step text",
+        all(config.BANNER in f.texts and any("Not medical advice" in s for s in f.texts) and not any("nasa" in s.lower() or "step" in s.lower() for s in f.texts) for f in frames.values()),
+        f"{len(frames)} frames",
+    )
+    abc_lcd = demo_video.frame_at(11.0, n).texts
+    abc_web = demo_video.frame_at(19.0, n).texts
+    def_lcd = demo_video.frame_at(28.5, n).texts
+    def_web = demo_video.frame_at(39.5, n).texts
+    rep.check(
+        "demo video",
+        "the BPM on the wrist is the same number the web app shows, for both crew members",
+        f"BPM: {abc['hr_now']}" in abc_lcd and str(abc["hr_now"]) in abc_web and f"BPM: {dfn['hr_now']}" in def_lcd and f"{dfn['hr_now']} BPM" in def_web,
+    )
+    rep.check("demo video", "DEF web view carries the blood-count caution and the Earth link line", "Not a radiation dose." in " ".join(def_web) + " ".join(demo_video.frame_at(39.9, n).texts) and "Sent to Earth" in def_web)
+    path, count = demo_video.render(root / "video", numbers=n)
+    img = Image.open(path)
+    total_ms = 0
+    for i in range(img.n_frames):
+        img.seek(i)
+        total_ms += img.info["duration"]
+    expected_ms = int(demo_video.duration() * demo_video.FPS) * int(1000 / demo_video.FPS)
+    rep.check(
+        "demo video",
+        "GIF is 1280x720, plays for the full length, loops and is under 10 MB",
+        img.size == demo_video.OUT_SIZE and count == int(demo_video.duration() * demo_video.FPS) and total_ms == expected_ms and img.info.get("loop") == 0 and path.stat().st_size < 10 * 1024 * 1024,
+        f"{path.stat().st_size / 1024 / 1024:.1f} MB, {total_ms / 1000:.1f} s",
+    )
+
+
+def probe_video(path):
+    import imageio_ffmpeg
+
+    out = subprocess.run([imageio_ffmpeg.get_ffmpeg_exe(), "-hide_banner", "-i", str(path)], capture_output=True, text=True).stderr
+    dur = re.search(r"Duration: (\d+):(\d+):([\d.]+)", out)
+    size = re.search(r"Video: .*?, (\d{3,4})x(\d{3,4})", out)
+    seconds = int(dur.group(1)) * 3600 + int(dur.group(2)) * 60 + float(dur.group(3)) if dur else 0
+    return seconds, (int(size.group(1)), int(size.group(2))) if size else None
+
+
+def check_screencast(rep, root):
+    try:
+        from streamlit.testing.v1 import AppTest
+    except ImportError:
+        rep.check("screencast", "streamlit and the video tools are installed (pip install -r requirements-video.txt)", False)
+        return
+    from healthsim import record_demo
+
+    numbers = demo_video.demo_numbers(root / "demo_data")
+    wt = root / "vitals_wt"
+    state = record_demo.export_state(wt, numbers)
+    page = wt / "healthsim" / "pages" / "1_Live_Vitals.py"
+    cwd = os.getcwd()
+    os.chdir(wt)
+    try:
+        at = AppTest.from_file(str(page), default_timeout=60).run()
+        before = len(at.metric) == 0 and not at.exception
+        at.radio[0].set_value("ABC")
+        at.button[0].click()
+        at.run()
+        abc_metrics = {m.label: m.value for m in at.metric}
+        abc_ok = abc_metrics.get("Heart rate") == f"{numbers['ABC']['hr_now']} BPM" and "GREEN" in abc_metrics.get("Status", "") and len(at.error) == 0 and not at.exception
+        at.radio[0].set_value("DEF")
+        at.button[0].click()
+        at.run()
+        def_metrics = {m.label: m.value for m in at.metric}
+        errors = " ".join(e.value for e in at.error)
+        def_ok = def_metrics.get("Heart rate") == f"{numbers['DEF']['hr_now']} BPM" and "AMBER" in def_metrics.get("Status", "") and "contact the flight surgeon" in errors and "not a radiation dose" in errors and not at.exception
+        blocks = " ".join(x.value for x in list(at.info) + list(at.warning) + list(at.caption))
+        label_ok = "SIMULATED" in blocks and "Not medical advice" in blocks and "Points reward taking check-ups, never health values" in blocks and "not core body temperature" in blocks
+    finally:
+        os.chdir(cwd)
+    rep.check("screencast", "vitals page shows nothing before a tag login", before)
+    rep.check("screencast", "vitals page for ABC shows the wrist BPM and green, with no alerts", abc_ok, f"{abc_metrics.get('Heart rate')}")
+    rep.check("screencast", "vitals page for DEF shows the wrist BPM, amber and the surgeon contact with the not-a-dose caution", def_ok, f"{def_metrics.get('Heart rate')}")
+    rep.check("screencast", "vitals page is labelled SIMULATED, not medical advice, skin surface temperature and no health-value points", label_ok)
+    rep.check("screencast", "page, state and rules come from settings, scoreboard sorted by points", state["rules"]["hr"] == config.alert("resting_hr")["min_change"] and [r["Points"] for r in state["scoreboard"]] == sorted((r["Points"] for r in state["scoreboard"]), reverse=True))
+    board = config.ROOT / "assets" / record_demo.LEADERBOARD_NAME
+    rep.check("screencast", "committed leaderboard screenshot exists, is a wide PNG under 10 MB", board.exists() and Image.open(board).size[0] >= 1200 and board.stat().st_size < 10 * 1024 * 1024, f"{Image.open(board).size}" if board.exists() else "missing")
+    video = config.ROOT / "assets" / record_demo.OUT_NAME
+    seconds, dims = probe_video(video) if video.exists() else (0, None)
+    rep.check("screencast", "committed screencast is a 1920x1080 MP4 of about 3 minutes under 10 MB", video.exists() and dims == (1920, 1080) and 120 <= seconds <= 210 and video.stat().st_size < 10 * 1024 * 1024, f"{seconds:.0f} s, {video.stat().st_size / 1024 / 1024:.1f} MB" if video.exists() else "missing")
+
+
 def run_scenario(rep, root, scenario, seed, overrides, limits):
     print(f"\n== {scenario} (seed {seed}) ==")
     d = root / scenario
@@ -428,6 +560,12 @@ def main():
         check_determinism(rep, root)
         print("\n== bridge ==")
         check_bridge(rep)
+        print("\n== diagrams ==")
+        check_diagrams(rep, root)
+        print("\n== demo video ==")
+        check_demo_video(rep, root)
+        print("\n== screencast ==")
+        check_screencast(rep, root)
     finally:
         if a.keep:
             print(f"\nkept generated data in {root}")

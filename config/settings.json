@@ -303,6 +303,35 @@
       "retries": 3
     }
   },
+  "brand": {
+    "note": "Team palette: Solar Alabaster FAF8F4, Helios Gold DCA137, Celestial Teal 1D5C63, Warm Terracotta C86D51, Eclipse Ink 141517. Other values are tints of these, plus a muted sage because the palette has no green for the traffic light.",
+    "palette_confirmed": true,
+    "palette": {
+      "background": "#FAF8F4",
+      "card": "#FFFFFF",
+      "card_alt": "#E4EDEC",
+      "line": "#D9D3C7",
+      "text": "#141517",
+      "muted": "#5A5F63",
+      "accent": "#1D5C63",
+      "gold": "#DCA137",
+      "green": "#5E9C76",
+      "amber": "#DCA137",
+      "red": "#C86D51",
+      "real": "#1D5C63",
+      "real_text": "#FAF8F4",
+      "sim": "#DCA137",
+      "sim_text": "#141517",
+      "on_accent": "#FAF8F4",
+      "on_accent_muted": "#C9DCDC"
+    },
+    "fonts": {
+      "regular": ["segoeui.ttf", "C:/Windows/Fonts/segoeui.ttf", "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"],
+      "bold": ["segoeuib.ttf", "C:/Windows/Fonts/segoeuib.ttf", "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"],
+      "mono": ["consola.ttf", "C:/Windows/Fonts/consola.ttf", "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf"]
+    },
+    "picture": {"width": 1920, "height": 1080, "supersample": 2}
+  },
   "live": {
     "label": "Live readings received from the wearable over Bluetooth, stored on the Pi and served to the web app",
     "bluetooth_port": "/dev/rfcomm0",
