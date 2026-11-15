@@ -1,0 +1,5 @@
+user_id,date,active_minutes,exercise_minutes,posture_change,back_hip_aches,mental_health_score,last_checkin
+5,2026-11-15,30.0,10.0,No,No,3,2026-11-15 00:14:10
+5,2026-11-15,30.0,10.0,No,No,4,2026-11-15 00:14:27
+5,2026-11-15,30.0,10.0,Yes,Yes,4,2026-11-15 00:14:37
+1,2026-11-15,30.0,10.0,No,No,4,2026-11-15 00:17:49
