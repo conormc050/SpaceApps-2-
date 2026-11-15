@@ -85,36 +85,87 @@ class Store:
             return "\n".join(self.db.iterdump())
 
 
+def parse_packet(text):
+    if "," not in text or "=" not in text:
+        return None
+    fields = {}
+    for part in text.split(","):
+        if "=" not in part:
+            return None
+        key, value = part.split("=", 1)
+        fields[key.strip()] = value.strip()
+    return fields
+
+
 class Bridge:
     def __init__(self, store, source="REAL"):
         self.store = store
         self.source = source
         self.active_crew = None
         self.ignored = 0
+        self.last_status = None
+
+    def add_value(self, name, value):
+        spec = live()["values"].get(name)
+        if spec is None:
+            quality, unit = "unknown_name", None
+        else:
+            lo, hi = spec["range"]
+            quality = "ok" if lo <= value <= hi else "out_of_range"
+            unit = spec["unit"]
+        self.store.add_reading(self.source, self.active_crew, name, value, unit, quality)
+
+    def handle_tag(self, uid):
+        crew = tags.lookup(uid)
+        if crew:
+            self.active_crew = crew
+            self.store.add_event(self.source, "login", crew=crew)
+        else:
+            self.store.add_event(self.source, "unknown_tag")
+        return "tag"
+
+    def handle_packet(self, packet):
+        names = live()["wearable_names"]
+        handled = False
+        for key, text in packet.items():
+            if key in names:
+                try:
+                    self.add_value(names[key], float(text))
+                except ValueError:
+                    continue
+                handled = True
+            elif key == "Status":
+                if text != self.last_status:
+                    self.last_status = text
+                    self.store.add_event(self.source, "wearable_status", crew=self.active_crew, detail=text)
+                handled = True
+        if not handled:
+            self.ignored += 1
+            return None
+        return "packet"
 
     def handle(self, raw):
-        msg = protocol.parse_device_line(raw)
+        text = raw.decode("ascii", "replace") if isinstance(raw, (bytes, bytearray)) else str(raw)
+        text = text.strip()
+        if text.startswith("UID=") and "," not in text:
+            uid = text[4:]
+            if uid.upper() in ("", "NONE"):
+                self.ignored += 1
+                return None
+            return self.handle_tag(uid)
+        packet = parse_packet(text)
+        if packet is not None:
+            return self.handle_packet(packet)
+        msg = protocol.parse_device_line(text)
         kind = msg["type"]
         if kind == "ready":
             self.store.add_event(self.source, "ready", detail=f"{msg['cols']}x{msg['rows']}")
         elif kind == "tag":
-            crew = tags.lookup(msg["uid"])
-            if crew:
-                self.active_crew = crew
-                self.store.add_event(self.source, "login", crew=crew)
-            else:
-                self.store.add_event(self.source, "unknown_tag")
+            return self.handle_tag(msg["uid"])
         elif kind == "button":
             self.store.add_event(self.source, "button", crew=self.active_crew, detail=str(msg["n"]))
         elif kind == "value":
-            spec = live()["values"].get(msg["name"])
-            if spec is None:
-                quality, unit = "unknown_name", None
-            else:
-                lo, hi = spec["range"]
-                quality = "ok" if lo <= msg["value"] <= hi else "out_of_range"
-                unit = spec["unit"]
-            self.store.add_reading(self.source, self.active_crew, msg["name"], msg["value"], unit, quality)
+            self.add_value(msg["name"], msg["value"])
         else:
             self.ignored += 1
             return None

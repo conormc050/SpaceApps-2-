@@ -322,6 +322,34 @@ def check_bridge(rep):
         def recv(self, n):
             return self.chunks.pop(0) if self.chunks else b""
 
+    wear_store = bridge.Store(":memory:")
+    wear = bridge.Bridge(wear_store, "REAL")
+    results = [
+        wear.handle(x)
+        for x in (
+            b"READY 16 2\r\n",
+            b"Vhr=72,Accel=9.8,Status=WAIT,UID=NONE\r\n",
+            b"UID=NONE\r\n",
+            b"UID=SIM-TAG-DEF\r\n",
+            b"Vhr=75,Accel=10.4,Status=WAIT,UID=SIM-TAG-DEF\r\n",
+            b"Vhr=300,Accel=9.9,Status=ALERT,UID=SIM-TAG-DEF\r\n",
+            b"UID=04:A3:5B:C2\r\n",
+            b"PONG\r\n",
+        )
+    ]
+    wr = wear_store.readings()
+    we = wear_store.events()
+    rep.check(
+        "bridge",
+        "wearable packets Vhr/Accel/Status become readings, change-only status events, and tag taps",
+        results == ["ready", "packet", None, "tag", "packet", "packet", "tag", None]
+        and [(r["name"], r["quality"]) for r in wr] == [("hr", "ok"), ("accel", "ok"), ("hr", "ok"), ("accel", "ok"), ("hr", "out_of_range"), ("accel", "ok")]
+        and [(e["kind"], e["detail"]) for e in we if e["kind"] == "wearable_status"] == [("wearable_status", "WAIT"), ("wearable_status", "ALERT")]
+        and wear.active_crew == "DEF"
+        and "04:A3:5B:C2" not in wear_store.dump_text()
+        and "SIM-TAG-DEF" not in wear_store.dump_text(),
+    )
+
     split_store = bridge.Store(":memory:")
     split = bridge.Bridge(split_store, "REAL")
     try:

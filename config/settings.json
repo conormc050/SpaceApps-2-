@@ -313,8 +313,10 @@
     "http_port": 8080,
     "reconnect_s": 3,
     "default_limit": 500,
+    "wearable_names": {"Vhr": "hr", "Accel": "accel"},
     "values": {
-      "hr": {"label": "heart rate", "unit": "BPM", "range": [30, 220]}
+      "hr": {"label": "heart rate", "unit": "BPM", "range": [30, 220]},
+      "accel": {"label": "total acceleration", "unit": "m/s2", "range": [0, 140]}
     },
     "simulate": {"interval_s": 1.0, "hr_mean": 66, "hr_sd": 4, "crew": "ABC"}
   },
