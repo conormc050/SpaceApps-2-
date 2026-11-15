@@ -306,6 +306,8 @@
   "live": {
     "label": "Live readings received from the wearable over Bluetooth, stored on the Pi and served to the web app",
     "bluetooth_port": "/dev/rfcomm0",
+    "bluetooth_channel": 1,
+    "silence_timeout_s": 30,
     "db_path": "data/live/live.db",
     "http_host": "0.0.0.0",
     "http_port": 8080,

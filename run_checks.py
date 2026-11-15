@@ -315,6 +315,22 @@ def check_bridge(rep):
         server.shutdown()
         server.server_close()
 
+    class FakeLink:
+        def __init__(self, chunks):
+            self.chunks = list(chunks)
+
+        def recv(self, n):
+            return self.chunks.pop(0) if self.chunks else b""
+
+    split_store = bridge.Store(":memory:")
+    split = bridge.Bridge(split_store, "REAL")
+    try:
+        bridge.feed_lines(FakeLink([b"Vhr=6", b"8\r\nVhr=", b"70\r\n\r\nK1\r", b"\nVhr=7"]), split)
+        closed = False
+    except ConnectionError:
+        closed = True
+    rep.check("bridge", "Bluetooth reader joins split chunks into lines, skips blanks, reports a closed link", closed and [r["value"] for r in split_store.readings()] == [68.0, 70.0] and [e["kind"] for e in split_store.events()] == ["button"])
+
     sim_store = bridge.Store(":memory:")
     sim = bridge.Bridge(sim_store, "SIMULATED")
     bridge.simulate(sim, count=20, interval_s=0)

@@ -192,6 +192,36 @@ def read_serial(port, baud, bridge, reconnect_s):
             time.sleep(reconnect_s)
 
 
+def feed_lines(link, bridge, max_line=256):
+    buf = b""
+    while True:
+        chunk = link.recv(max_line)
+        if not chunk:
+            raise ConnectionError("the wearable closed the link")
+        buf += chunk
+        while b"\n" in buf:
+            line, buf = buf.split(b"\n", 1)
+            if line.strip():
+                bridge.handle(line)
+        if len(buf) > max_line:
+            buf = b""
+
+
+def read_bluetooth(address, channel, bridge, reconnect_s, silence_s):
+    import socket
+
+    while True:
+        try:
+            with socket.socket(socket.AF_BLUETOOTH, socket.SOCK_STREAM, socket.BTPROTO_RFCOMM) as link:
+                link.settimeout(silence_s)
+                link.connect((address, channel))
+                print(f"connected to {address} on channel {channel}", flush=True)
+                feed_lines(link, bridge)
+        except OSError as e:
+            print(f"bluetooth link lost ({e}); retrying in {reconnect_s} s", flush=True)
+            time.sleep(reconnect_s)
+
+
 def simulate(bridge, count=None, interval_s=None):
     sim = live()["simulate"]
     interval = sim["interval_s"] if interval_s is None else interval_s
@@ -211,6 +241,7 @@ def main():
     cfg = live()
     p = argparse.ArgumentParser(description="Receive wearable readings over Bluetooth serial, store them on the Pi and serve them over HTTP.")
     p.add_argument("--port", default=cfg["bluetooth_port"], help="serial port of the paired HC-05, for example /dev/rfcomm0")
+    p.add_argument("--bt-address", default=None, help="connect straight to the paired Bluetooth module, for example AA:BB:CC:DD:EE:FF; no rfcomm needed")
     p.add_argument("--simulate", action="store_true", help="feed SIMULATED readings instead of reading the wearable")
     p.add_argument("--http-port", type=int, default=cfg["http_port"])
     p.add_argument("--db", default=str(config.ROOT / cfg["db_path"]))
@@ -223,6 +254,8 @@ def main():
     try:
         if a.simulate:
             simulate(bridge)
+        elif a.bt_address:
+            read_bluetooth(a.bt_address, cfg["bluetooth_channel"], bridge, cfg["reconnect_s"], cfg["silence_timeout_s"])
         else:
             read_serial(a.port, config.section("serial")["baud"], bridge, cfg["reconnect_s"])
     except KeyboardInterrupt:
