@@ -134,7 +134,7 @@ class Bridge:
                 except ValueError:
                     continue
                 handled = True
-            elif key == "Status":
+            elif key.lower() == "status":
                 if text != self.last_status:
                     self.last_status = text
                     self.store.add_event(self.source, "wearable_status", crew=self.active_crew, detail=text)
@@ -153,6 +153,22 @@ class Bridge:
                 self.ignored += 1
                 return None
             return self.handle_tag(uid)
+        if text.startswith("{"):
+            try:
+                obj = json.loads(text)
+            except ValueError:
+                self.ignored += 1
+                return None
+            if not isinstance(obj, dict):
+                self.ignored += 1
+                return None
+            if obj.get("event") == "SCAN":
+                uid = str(obj.get("uid", ""))
+                if uid.upper() in ("", "NONE"):
+                    self.ignored += 1
+                    return None
+                return self.handle_tag(uid)
+            return self.handle_packet({k: str(v) for k, v in obj.items()})
         packet = parse_packet(text)
         if packet is not None:
             return self.handle_packet(packet)

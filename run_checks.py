@@ -350,6 +350,34 @@ def check_bridge(rep):
         and "SIM-TAG-DEF" not in wear_store.dump_text(),
     )
 
+    json_store = bridge.Store(":memory:")
+    jb = bridge.Bridge(json_store, "REAL")
+    jres = [
+        jb.handle(x)
+        for x in (
+            b'{"bpm":72,"accel":9.8,"status":"WAIT","uid":"NONE"}\r\n',
+            b'{"event":"SCAN","uid":"SIM-TAG-DEF"}\r\n',
+            b'{"bpm":75,"accel":10.4,"status":"OK","uid":"SIM-TAG-DEF"}\r\n',
+            b'{"bpm":300,"accel":9.9,"status":"OK","uid":"SIM-TAG-DEF"}\r\n',
+            b'{"event":"SCAN","uid":"04:A3:5B:C2"}\r\n',
+            b'{"event":"SCAN","uid":"NONE"}\r\n',
+            b'{"bpm":\r\n',
+            b"[1,2]\r\n",
+        )
+    ]
+    jr = json_store.readings()
+    je = json_store.events()
+    rep.check(
+        "bridge",
+        "wearable JSON lines become readings, change-only status events and hashed tag logins; bad JSON is ignored",
+        jres == ["packet", "tag", "packet", "packet", "tag", None, None, None]
+        and [(r["name"], r["quality"]) for r in jr] == [("hr", "ok"), ("accel", "ok"), ("hr", "ok"), ("accel", "ok"), ("hr", "out_of_range"), ("accel", "ok")]
+        and [e["detail"] for e in je if e["kind"] == "wearable_status"] == ["WAIT", "OK"]
+        and jb.active_crew == "DEF"
+        and "04:A3:5B:C2" not in json_store.dump_text()
+        and "SIM-TAG-DEF" not in json_store.dump_text(),
+    )
+
     split_store = bridge.Store(":memory:")
     split = bridge.Bridge(split_store, "REAL")
     try:
